@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fisheries USSD Simulator</title>
+  <style>
+    body { background: #1e272e; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; font-family: monospace; }
+    .phone { width:260px; height:520px; background:#2f3640; border-radius:40px; padding:15px; box-shadow:0 10px 30px rgba(0,0,0,0.5); display:flex; flex-direction:column; align-items:center; position:relative; }
+    .speaker { width:50px; height:6px; background:#888; border-radius:3px; margin-top:5px; }
+    .screen { width:100%; height:360px; background:#0f0f0f; margin:15px 0; border-radius:20px; padding:15px; color:#00ff66; font-size:14px; white-space:pre-wrap; overflow-y:auto; box-shadow: inset 0 0 6px rgba(0,255,102,0.2); }
+    .input-area { width:100%; display:flex; flex-direction:column; gap:5px; }
+    .input-area input, .input-area button { padding:6px; font-size:14px; border-radius:6px; border:none; }
+    .input-area input { background:#222; color:#00ff66; text-align:center; }
+    .input-area button { background:#00ff66; color:#000; font-weight:bold; cursor:pointer; }
+    .exit-button { background:#e84118; color:#fff; }
+    .bottom-bar { position:absolute; bottom:10px; height:5px; width:60px; background:#7f8fa6; border-radius:3px; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="speaker"></div>
+    <div id="screen" class="screen">Enter USSD code (*888*22# or *888*33#) and press Call / Gali koodhka USSD oo riix Call</div>
+    <div class="input-area" id="dialArea">
+      <input type="text" id="ussdInput" placeholder="e.g. *888*22#">
+      <button onclick="sendUssd()">Call</button>
+    </div>
+    <div class="input-area" id="optionArea" style="display:none;">
+      <input type="text" id="optionInput" placeholder="Enter option / Gali doorasho">
+      <button onclick="handleOption()">Send</button>
+      <button class="exit-button" onclick="exitSession()">Exit / Bixi</button>
+    </div>
+    <div class="bottom-bar"></div>
+  </div>
+  <script>
+    const screen = document.getElementById("screen");
+    const dialArea = document.getElementById("dialArea");
+    const optionArea = document.getElementById("optionArea");
+    const ussdInput = document.getElementById("ussdInput");
+    const optionInput = document.getElementById("optionInput");
+    let currentState = "start";
+    let catchData = [], envData = [], fishermanData = [], vesselData = [];
+
+    function sendUssd() {
+      const code = ussdInput.value.trim();
+      ussdInput.value = "";
+      if (code === "*888*22#") {
+        showCollectorMenu();
+      } else if (code === "*888*33#") {
+        showAdminMenu();
+      } else {
+        screen.textContent = "USSD code unknown / Koodh USSD lama aqoonsan.";
+      }
+    }
+
+    function handleOption() {
+      const opt = optionInput.value.trim();
+      optionInput.value = "";
+
+      // Collector flows
+      if (currentState === "collectorMenu") {
+        if (opt === "1") {
+          currentState = "catch_type";
+          screen.textContent = `Fish type / Nooca Kalluunka:
+1. Tabadiin
+2. Saynuub
+3. Taraaqad
+4. Faras
+5. Gaxash
+6. Other / Kale`;
+        } else if (opt === "2") {
+          currentState = "env_weather";
+          screen.textContent = `Weather / Cimilada:
+1. Sunny / Qorax leh
+2. Cloudy / Daruur leh
+3. Rainy / Roob`;
+        } else if (opt === "3") {
+          exitSession();
+        } else {
+          screen.textContent = "Invalid choice / Doorasho khaldan.";
+        }
+      } else if (currentState === "catch_type") {
+        catchData.push(opt);
+        currentState = "catch_time";
+        screen.textContent = "Catch date (yyyy-mm-dd) / Taariikhda qabashada (yyyy-mm-dd):";
+      } else if (currentState === "catch_time") {
+        catchData.push(opt);
+        currentState = "catch_mass";
+        screen.textContent = "Quantity (KG) / Miisaan (kg):";
+      } else if (currentState === "catch_mass") {
+        catchData.push(opt);
+        currentState = "catch_price";
+        screen.textContent = "Price ($) / Qiimo ($):";
+      } else if (currentState === "catch_price") {
+        catchData.push(opt);
+        currentState = "catch_method";
+        screen.textContent = `Method / Hab qabasho:
+1. Net / Shabaag
+2. Hook / Shaayad
+3. Trap / Jilaab
+4. Trawler / Jarriif`;
+      } else if (currentState === "catch_method") {
+        catchData.push(opt);
+        currentState = "catch_location";
+        screen.textContent = `Landing site / Meesha lagu keenay kalluunka:
+1. Puntland
+2. Somalia (outside Puntland)
+3. World / Dunida`;
+      } else if (currentState === "catch_location") {
+        catchData.push(opt);
+        currentState = "catch_region";
+        screen.textContent = (opt === "1")
+          ? `Region / Gobolka:
+1. Bari
+2. Karkaar
+3. Sanaag
+4. Nugaal
+5. Mudug
+6. Haylaan`
+          : (opt === "2")
+          ? `Somalia State / Maamul:
+1. Galmudug
+2. Jubaland
+3. Hirshabelle
+4. SW State
+5. Banadir
+6. Somaliland`
+          : `Continent / Qaaradda:
+1. Africa
+2. Asia
+3. Europe
+4. America
+5. Australia`;
+      } else if (currentState === "catch_region") {
+        catchData.push(opt);
+        screen.textContent = `✅ Catch recorded / Xog qabasho:
+${catchData.join(" | ")}
+📦 Saved / La keydiyay.`;
+        catchData = [];
+        showCollectorMenu();
+
+      // Environment Info flows
+      } else if (currentState === "env_weather") {
+        envData.push(opt);
+        currentState = "env_sea";
+        screen.textContent = `Sea condition / Heer badda:
+1. Calm / Deggan
+2. Moderate / Dhex-dhexaad
+3. Rough / Daran`;
+      } else if (currentState === "env_sea") {
+        envData.push(opt);
+        currentState = "env_temp";
+        screen.textContent = "Water temp (°C) / Heerkul biyo (°C):";
+      } else if (currentState === "env_temp") {
+        envData.push(opt);
+        currentState = "env_wind";
+        screen.textContent = "Wind speed / Xawaare dabayl (km/h):";
+      } else if (currentState === "env_wind") {
+        envData.push(opt);
+        currentState = "env_time";
+        screen.textContent = "Observation time / Waqti (yyyy-mm-dd hh:mm):";
+      } else if (currentState === "env_time") {
+        envData.push(opt);
+        screen.textContent = `✅ Env recorded / Deegaanka:
+${envData.join(" | ")}
+📦 Saved / La keydiyay.`;
+        envData = [];
+        showCollectorMenu();
+
+      // Admin flows
+      } else if (currentState === "adminMenu") {
+        if (opt === "1") {
+          currentState = "fisherman_name";
+          screen.textContent = "Fisherman name / Magac Kalluumayste:";
+        } else if (opt === "2") {
+          currentState = "vessel_type";
+          screen.textContent = `Vessel type / Nooca Doonta:
+1. Afdheer
+2. Huri
+3. Leyla Alawi
+4. Loox
+5. Volvo
+6. 2000
+7. Other / Kale`;
+        } else if (opt === "3") {
+          screen.textContent = `👥 Fishermen: ${fishermanData.length}
+🚤 Vessels: ${vesselData.length}`;
+        } else if (opt === "4") {
+          exitSession();
+        } else {
+          screen.textContent = "Invalid choice / Doorasho khaldan.";
+        }
+
+      // Fisherman registration
+      } else if (currentState === "fisherman_name") {
+        fishermanData.push(opt);
+        currentState = "fisherman_mother";
+        screen.textContent = "Mother's name / Magaca hooyada kalluumaystaha:";
+      } else if (currentState === "fisherman_mother") {
+        fishermanData.push(opt);
+        currentState = "fisherman_association";
+        screen.textContent = `Member of coop? / Xubin iskaashatada?
+1. Yes / Haa
+2. No / Maya`;
+      } else if (currentState === "fisherman_association") {
+        fishermanData.push(opt);
+        currentState = "fisherman_gender";
+        screen.textContent = `Gender / Jinsiga:
+1. Male / Lab
+2. Female / Dhedig`;
+      } else if (currentState === "fisherman_gender") {
+        fishermanData.push(opt);
+        currentState = "fisherman_phone";
+        screen.textContent = "Phone number / Lambarka taleefanka:";
+      } else if (currentState === "fisherman_phone") {
+        fishermanData.push(opt);
+        currentState = "fisherman_emergency";
+        screen.textContent = "Emergency contact / Lambarka ehelka ah:";
+      } else if (currentState === "fisherman_emergency") {
+        fishermanData.push(opt);
+        currentState = "fisherman_marital";
+        screen.textContent = `Marital status / Xaaladda qoyska:
+1. Married / Guursaday
+2. Single / Kaligii`;
+      } else if (currentState === "fisherman_marital") {
+        fishermanData.push(opt);
+        currentState = "fisherman_birthplace";
+        screen.textContent = `Born in Somalia? / Dhashay Soomaaliya?
+1. Yes / Haa
+2. No / Maya`;
+      } else if (currentState === "fisherman_birthplace") {
+        fishermanData.push(opt);
+        currentState = "fisherman_birthdate";
+        screen.textContent = "Birthdate (yyyy-mm-dd) / Taariikhda dhalashada:";
+      } else if (currentState === "fisherman_birthdate") {
+        fishermanData.push(opt);
+        currentState = "fisherman_edu";
+        screen.textContent = `Education level / Heer waxbarasho:
+1. Primary / Dugsiga hoose
+2. Secondary / Dugsiga sare
+3. University / Jaamacad
+4. Above / Ka sareeya`;
+      } else if (currentState === "fisherman_edu") {
+        fishermanData.push(opt);
+        currentState = "fisherman_role";
+        screen.textContent = `Boat role / Xilka doonta:
+1. Fisherman / Kalluumayste
+2. Captain / Naakhuude
+3. Crew / Shaqaale
+4. Net Handler / Shabaag debo
+5. Assistant / Caawiye
+6. Engineer / Injineer
+7. Other / Kale`;
+      } else if (currentState === "fisherman_role") {
+        fishermanData.push(opt);
+        currentState = "fisherman_experience";
+        screen.textContent = `Experience (yrs) / Waayo aragnimo (sano):
+1. 0-10
+2. 10-20
+3. 20-30
+4. 30-40
+5. 40+`;
+      } else if (currentState === "fisherman_experience") {
+        fishermanData.push(opt);
+        currentState = "fisherman_training";
+        screen.textContent = `Training received? / Tababar xirfadeed?
+1. Yes / Haa
+2. No / Maya`;
+      } else if (currentState === "fisherman_training") {
+        fishermanData.push(opt);
+        currentState = "fisherman_port";
+        screen.textContent = `Home port / Gobolka marsada:
+1. Sanaag
+2. Haylaan
+3. Raascasayr
+4. Mudug
+5. Nugaal
+6. Karkaar
+7. Bari`;
+      } else if (currentState === "fisherman_port") {
+        fishermanData.push(opt);
+        screen.textContent = `✅ Fisherman registered:
+${fishermanData.join(" | ")}
+📦 Saved / La keydiyay.`;
+        fishermanData = [];
+        showAdminMenu();
+
+      // Vessel registration
+      } else if (currentState === "vessel_type") {
+        vesselData.push(opt);
+        currentState = "vessel_workers";
+        screen.textContent = "Crew size / Shaqaale doonta:";
+      } else if (currentState === "vessel_workers") {
+        vesselData.push(opt);
+        currentState = "vessel_origin";
+        screen.textContent = `Origin / Asalka doonta:`;
+      } else if (currentState === "vessel_origin") {
+        vesselData.push(opt);
+        currentState = "vessel_madein";
+        screen.textContent = `Built in Somalia? / Soomaaliya lagu sameeyay?
+1. Yes / Haa
+2. No / Maya`;
+      } else if (currentState === "vessel_madein") {
+        vesselData.push(opt);
+        currentState = "vessel_year";
+        screen.textContent = "Build year / Sanadka la sameeyay:";
+      } else if (currentState === "vessel_year") {
+        vesselData.push(opt);
+        currentState = "vessel_material";
+        screen.textContent = `Material / Qalabka:
+1. Fiberglass / Faybar galas
+2. Wood / Alwaax
+3. Other / Kale`;
+      } else if (currentState === "vessel_material") {
+        vesselData.push(opt);
+        currentState = "vessel_deck";
+        screen.textContent = `Deck? / Sagxad?
+1. Yes / Haa
+2. No / Maya`;
+      } else if (currentState === "vessel_deck") {
+        vesselData.push(opt);
+        currentState = "vessel_port";
+        screen.textContent = "Port code / Koodh marsada:";
+      } else if (currentState === "vessel_port") {
+        vesselData.push(opt);
+        screen.textContent = `✅ Vessel registered:
+${vesselData.join(" | ")}
+📦 Saved / La keydiyay.`;
+        vesselData = [];
+        showAdminMenu();
+      }
+    }
+
+    function showCollectorMenu() {
+      dialArea.style.display = "none";
+      optionArea.style.display = "flex";
+      currentState = "collectorMenu";
+      screen.textContent = `Collector / Kalluumayste:
+1. Daily Catch / Qabsasho
+2. Environment / Deegaanka
+3. Exit / Bixi`;
+    }
+
+    function showAdminMenu() {
+      dialArea.style.display = "none";
+      optionArea.style.display = "flex";
+      currentState = "adminMenu";
+      screen.textContent = `Admin / Maamul:
+1. Register Fisherman / Diiwaan Galin
+2. Register Vessel / Diiwaan Doon
+3. Summary / Warbixin
+4. Exit / Bixi`;
+    }
+
+    function exitSession() {
+      dialArea.style.display = "flex";
+      optionArea.style.display = "none";
+      currentState = "start";
+      screen.textContent = "Session ended / Kalfadhigu wuu dhammaaday.";
+    }
+  </script>
+</body>
+</html>
